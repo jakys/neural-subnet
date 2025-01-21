@@ -6,7 +6,7 @@ import argparse
 from fastapi import FastAPI, HTTPException, Body
 import uvicorn
 
-from infer import Text2Image, Removebg, Image2Views, Views2Mesh, GifRenderer
+from infer import SNText2Image, Removebg, Image2Views, Views2Mesh, GifRenderer
 
 app = FastAPI()
 
@@ -35,7 +35,7 @@ args = get_args()
 rembg_model = Removebg()
 image_to_views_model = Image2Views(device=args.device, use_lite=args.use_lite)
 views_to_mesh_model = Views2Mesh(args.mv23d_cfg_path, args.mv23d_ckt_path, args.device, use_lite=args.use_lite)
-text_to_image_model = Text2Image(pretrain=args.text2image_path, device=args.device, save_memory=args.save_memory)
+text_to_image_model = SNText2Image(pretrain=args.text2image_path, device=args.device, save_memory=args.save_memory)
 if args.do_render:
     gif_renderer = GifRenderer(device=args.device)
 
