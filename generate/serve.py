@@ -5,8 +5,9 @@ from PIL import Image
 import argparse
 from fastapi import FastAPI, HTTPException, Body
 import uvicorn
+from diffusers import SanaPipeline
 
-from infer import SNText2Image, Removebg, Image2Views, Views2Mesh, GifRenderer
+from infer import  Removebg, Image2Views, Views2Mesh, GifRenderer
 
 app = FastAPI()
 
@@ -31,11 +32,44 @@ def get_args():
 
 args = get_args()
 
+
+pipe = SanaPipeline.from_pretrained(
+    "Efficient-Large-Model/Sana_1600M_1024px_BF16_diffusers",
+    torch_dtype=torch.float16,
+    device_map="balanced",
+)
+pipe.vae.to(torch.bfloat16)
+pipe.text_encoder.to(torch.bfloat16)
+pipe.transformer = pipe.transformer.to(torch.bfloat16)
+
+def sana_gen_image(prompt,device="cuda:0", seed=23, steps=20):
+    '''
+        inputs:
+            prompr: str
+            seed: int
+            steps: int
+        return:
+            rgb: PIL.Image
+    '''
+    prompt = prompt + ' white background cartoon clarity 3D stereo'
+    rgb = pipe(
+        prompt=prompt,
+        height=1024,
+        width=1024,
+        guidance_scale=4.5,
+        num_inference_steps=steps,
+        generator=torch.Generator(device=device).manual_seed(seed),
+        return_dict=False
+    )[0][0]
+    torch.cuda.empty_cache()
+    return rgb
+
+
 # Initialize models globally
 rembg_model = Removebg()
 image_to_views_model = Image2Views(device=args.device, use_lite=args.use_lite)
 views_to_mesh_model = Views2Mesh(args.mv23d_cfg_path, args.mv23d_ckt_path, args.device, use_lite=args.use_lite)
-text_to_image_model = SNText2Image(pretrain=args.text2image_path, device=args.device, save_memory=args.save_memory)
+
 if args.do_render:
     gif_renderer = GifRenderer(device=args.device)
 
@@ -78,7 +112,7 @@ async def text_to_3d(prompt: str = Body()):
 
     # Stage 1: Text to Image
     start = time.time()
-    res_rgb_pil = text_to_image_model(
+    res_rgb_pil = sana_gen_image(
         prompt,
         seed=args.t2i_seed,
         steps=args.t2i_steps
